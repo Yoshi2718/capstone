@@ -228,7 +228,7 @@ selected_month = st.sidebar.selectbox(
 )
 analysis_type = st.sidebar.radio(
     "Select Analysis Type",
-    ["Revenue Forecast", "Sensitivity Analysis", "Gap Analysis", "KPI Optimization"]
+    ["KPI Month 0", "KPI Optimization"]
 )
 
 # Get data for selected shop and month
@@ -238,133 +238,8 @@ shop_data = st.session_state.macrotable_df[
 ].copy()
 
 # Main content area
-if analysis_type == "Revenue Forecast":
-    st.header("Revenue Forecast Analysis")
-
-    # Get shop-specific data
-    shop_monthly_data = st.session_state.macrotable_df[
-        st.session_state.macrotable_df["shop_id"] == shop_id
-    ].copy()
-
-    # Get shop-specific parameters from the generated data
-    n_months = 12
-    traffic = shop_monthly_data["total_traffic"].values  # Already includes shop-specific variations
-    prob_prospect_generation = shop_monthly_data["prospect_generation"].values[0]  # Shop-specific value
-    prob_prospect_conversion = np.array([0.3, 0.2, 0.1] + [0] * 9)  # Common conversion pattern
-    local_prob_direct_customer_conversion = shop_monthly_data["locals_new_effectiveness"].values[0]  # Shop-specific value
-    tourist_prob_direct_customer_conversion = shop_monthly_data["tourist_new_effectiveness"].values[0]  # Shop-specific value
-    local_retention_prob = np.array([0.2, 0.1, 0.06, 0.05, 0.04, 0.03] + [0.03] * 6)  # Common retention pattern
-    tourist_retention_prob = np.array([0.12, 0.6, 0.5, 0.3, 0.02, 0.01] + [0.01] * 6)  # Common retention pattern
-    local_prob_existing_clients_conversion = shop_monthly_data["local_come_back"].values[0]  # Shop-specific value
-    tourist_prob_existing_clients_conversion = shop_monthly_data["tourist_come_back"].values[0]  # Shop-specific value
-    existing_local_customers = shop_monthly_data["db_buyers_locals"].values[0]  # Shop-specific value
-    existing_tourist_customers = shop_monthly_data["db_buyers_tourist"].values[0]  # Shop-specific value
-
-    # Calculate forecasts with shop-specific parameters
-    local_forecast = compute_customer_forecast(
-        n_months, traffic, prob_prospect_generation, prob_prospect_conversion,
-        local_prob_direct_customer_conversion, local_retention_prob,
-        local_prob_existing_clients_conversion, existing_local_customers
-    )
-
-    tourist_forecast = compute_customer_forecast(
-        n_months, traffic, 0, prob_prospect_conversion,
-        tourist_prob_direct_customer_conversion, tourist_retention_prob,
-        tourist_prob_existing_clients_conversion, existing_tourist_customers
-    )
-
-    # Create average ticket dataframe
-
-    local_avg_ticket_new_from_prospects = 50
-    local_avg_ticket_new_direct = 60
-    local_avg_ticket_existing = 40
-
-    tourist_avg_ticket_new_from_prospects = 0
-    tourist_avg_ticket_new_direct = 80
-    tourist_avg_ticket_existing = 45
-
-    avg_ticket_df = pd.DataFrame({
-        "local_avg_ticket_new_from_prospects": [local_avg_ticket_new_from_prospects],
-        "local_avg_ticket_new_direct": [local_avg_ticket_new_direct],
-        "local_avg_ticket_existing": [local_avg_ticket_existing],
-        "tourist_avg_ticket_new_from_prospects": [tourist_avg_ticket_new_from_prospects],
-        "tourist_avg_ticket_new_direct": [tourist_avg_ticket_new_direct],
-        "tourist_avg_ticket_existing": [tourist_avg_ticket_existing]
-    })
-
-    # Calculate revenue forecast
-    revenue_forecast = compute_revenue_forecast(local_forecast, tourist_forecast, avg_ticket_df)
-
-    # Create accumulated monthly data for comparison
-    date_range = pd.date_range(start=selected_month, periods=12, freq='M')
-    monthly_data = pd.DataFrame(index=date_range)
-    monthly_data['Total Revenue Forecast'] = revenue_forecast['revenue_total'].cumsum().values
-    monthly_data['Budget'] = [shop_data['budget_sales'].iloc[0]] * 12
-    monthly_data['Previous Year Sales'] = [(shop_data['prev_year_sales'].iloc[0])] * 12
-    monthly_data.index = monthly_data.index.strftime('%Y %b')
-
-    # Plot accumulated revenue comparison
-    fig_trend = px.line(
-        monthly_data,
-        title="Accumulated Revenue Forecast vs Budget and Previous Year",
-        labels={"value": "Accumulated Revenue (€)", "index": "Month"},
-        y=["Total Revenue Forecast", "Budget", "Previous Year Sales"]
-    )
-    fig_trend.update_layout(
-        yaxis=dict(
-            tickformat="€,.0f",
-            title="Revenue (€)"
-        )
-    )
-    st.plotly_chart(fig_trend, use_container_width=True)
-
-elif analysis_type == "Sensitivity Analysis":
-    st.header("Sensitivity Analysis")
-
-    # Initialize parameters for sensitivity analysis
-    n_months = 12
-    traffic = np.array([1000, 1200, 1100, 1300, 1250, 1400, 1300, 1250, 1400, 1300, 1250, 1400])
-    prob_prospect_generation = 0.30
-    prob_prospect_conversion = np.array([0.3, 0.2, 0.1] + [0] * 9)
-    local_prob_direct_customer_conversion = 0.1
-    tourist_prob_direct_customer_conversion = 0.05
-    local_retention_prob = np.array([0.2, 0.1, 0.06, 0.05, 0.04, 0.03] + [0.03] * 6)
-    tourist_retention_prob = np.array([0.12, 0.6, 0.5, 0.3, 0.02, 0.01] + [0.01] * 6)
-    local_prob_existing_clients_conversion = 0.03
-    tourist_prob_existing_clients_conversion = 0.01
-    existing_local_customers = 5000
-    existing_tourist_customers = 1000
-
-    # Create average ticket dataframe
-    avg_ticket_df = pd.DataFrame({
-        'local_avg_ticket_new_from_prospects': [50],
-        'local_avg_ticket_new_direct': [60],
-        'local_avg_ticket_existing': [40],
-        'tourist_avg_ticket_new_from_prospects': [0],
-        'tourist_avg_ticket_new_direct': [80],
-        'tourist_avg_ticket_existing': [45]
-    })
-
-    sensitivity_df = perform_sensitivity_analysis(
-        traffic, prob_prospect_generation, prob_prospect_conversion,
-        local_prob_direct_customer_conversion, local_retention_prob,
-        local_prob_existing_clients_conversion, tourist_prob_direct_customer_conversion,
-        tourist_prob_existing_clients_conversion, tourist_retention_prob,
-        existing_local_customers, existing_tourist_customers, avg_ticket_df
-    )
-
-    # Plot sensitivity analysis
-    fig = px.bar(
-        sensitivity_df,
-        title=f"% Impact on Total Revenue",
-        labels={"index": "Variable", "Impact %": "% Impact on Total Revenue"}
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.dataframe(sensitivity_df.style.format({"Impact %": "{:.2f}%"}))
-
-elif analysis_type == "Gap Analysis":
-    st.header("Gap Analysis")
+if  analysis_type == "KPI Month 0":
+    st.header("KPI Month 0")
     # Calculate revenue forecast for all months
     n_months = 12
     monthly_data = st.session_state.macrotable_df[
@@ -401,9 +276,8 @@ elif analysis_type == "Gap Analysis":
     })
 
     revenue_forecast = compute_revenue_forecast(local_forecast, tourist_forecast, avg_ticket_df)
-    current_month_idx = monthly_data[monthly_data["month"] == selected_month].index[0] - 1
-    current_forecast = revenue_forecast["revenue_total"].iloc[:current_month_idx + 1].sum()
-    remaining_forecast = revenue_forecast["revenue_total"].iloc[current_month_idx + 1:].sum()
+    current_forecast = revenue_forecast["revenue_total"].iloc[:0].sum()
+    remaining_forecast = revenue_forecast["revenue_total"].iloc[0:].sum()
     budget_target = monthly_data["budget_sales"].iloc[0]
     gap = current_forecast + remaining_forecast - budget_target
 
@@ -413,30 +287,35 @@ elif analysis_type == "Gap Analysis":
     col3.metric("Budget Target", f"€{budget_target:,.0f}")
     col4.metric("Gap", f"€{gap:,.0f}")
 
-    # Calculate remaining months forecast
-    remaining_months = 13 - selected_month.month  # Number of remaining months
-    monthly_data = monthly_data[monthly_data["month"] >= selected_month].copy()
-    monthly_data["forecast"] = revenue_forecast["revenue_total"].values[:remaining_months]
-    monthly_data["monthly_budget"] = monthly_data["budget_sales"]/12
-    monthly_data["gap"] = monthly_data["monthly_budget"] - monthly_data["forecast"]
+    # Create accumulated monthly data for comparison
+    end_date = pd.Timestamp('2020-12-31')
+    date_range = pd.date_range(start=selected_month, end=end_date, freq='M')
+    monthly_data = pd.DataFrame(index=date_range)
+    monthly_data['Total Revenue Forecast'] = revenue_forecast['revenue_total'].values[:len(date_range)].cumsum()
+    monthly_data['Budget'] = [shop_data['budget_sales'].iloc[0]] * len(date_range)
+    monthly_data.index = monthly_data.index.strftime('%Y %b')
 
-    # Plot monthly gaps
-    monthly_data["month"] = monthly_data["month"].dt.strftime('%Y %b')
+    # Plot adjusted revenue as bar and annual budget as line
     fig_monthly = px.bar(
         monthly_data,
-        x="month",
-        y="gap",
-        title="Monthly Budget Gaps for Remaining Months",
-        labels={"gap": "Gap (€)", "month": "Month"}
+        x=monthly_data.index,
+        y="Total Revenue Forecast",
+        title="Adjusted Revenue Forecast with Annual Budget",
+        labels={"y": "Revenue (€)", "x": "Month"}
     )
+
+    # Add annual budget line    
+    fig_monthly.add_scatter(
+        x=monthly_data.index,
+        y=monthly_data["Budget"],
+        name="Budget Target",
+        line=dict(color='blue', width=2)
+    )
+
+    # Ensure months are sorted correctly in the chart
     fig_monthly.update_layout(
-        xaxis=dict(
-            type='category',
-            categoryorder='array',
-            categoryarray=pd.date_range(start=selected_month, 
-                                      end='2020-12-31', 
-                                      freq='M').strftime('%Y %b')
-        )
+        xaxis=dict(type='category'),
+        showlegend=True
     )
     st.plotly_chart(fig_monthly, use_container_width=True)
 
@@ -593,24 +472,117 @@ else:  # KPI Optimization
     col3.metric("Budget Target", f"€{budget_target:,.0f}")
     col4.metric("Gap", f"€{gap:,.0f}")
 
-    # Plot revenue comparison with accumulated values
+    # Define seasonal factors for each month (higher in summer and winter holidays)
+    seasonal_factors = [1.0, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.4, 1.2, 1.1, 1.3, 1.5]
+
+    # Apply seasonal factors to adjusted revenue
+    seasonal_adjusted_revenue = adjusted_revenue["revenue_total"] * seasonal_factors
+
+    # Apply seasonal factors to revenue and calculate cumulative sum
+    seasonal_cumsum = pd.Series(seasonal_adjusted_revenue).cumsum()
+
+    # Get remaining months data
+    current_month_idx = shop_monthly_data[shop_monthly_data["month"] == selected_month].index[0]
+    remaining_months = adjusted_revenue["revenue_total"].iloc[current_month_idx:]
+    
+    # Create revenue comparison DataFrame for remaining months
     revenue_comparison = pd.DataFrame({
-        "Month": [f"Month {i+1}" for i in range(n_months)],
-        "Adjusted Revenue": adjusted_revenue["revenue_total"].cumsum(),
-        "Monthly Budget": [shop_data["budget_sales"].values[0]] * 12
+        "Adjusted Revenue": remaining_months.cumsum(),
+        "Budget": [shop_data["budget_sales"].values[0]] * len(remaining_months)
     })
 
-    fig = px.line(
+    fig = px.bar(
         revenue_comparison,
-        x="Month",
-        y=["Adjusted Revenue", "Monthly Budget"],
-        title="Accumulated Revenue Projection with Adjusted KPIs",
-        labels={"value": "Accumulated Revenue (€)", "variable": "Type"}
+        x=revenue_comparison.index,
+        y="Adjusted Revenue",
+        title="Accumulated Adjusted Revenue Projection (Remaining Months)",
+        labels={"Adjusted Revenue": "Accumulated Revenue (€)", "Month": "Month"}
     )
+
+    # Add annual budget line    
+    fig.add_scatter(
+        x=revenue_comparison.index,
+        y=revenue_comparison["Budget"],
+        name="Budget Target",
+        line=dict(color='blue', width=2)
+    )
+
+    # Format y-axis for currency display
     fig.update_layout(
         yaxis=dict(
             tickformat="€,.0f",
             title="Revenue (€)"
         )
     )
+
     st.plotly_chart(fig, use_container_width=True)
+
+    # Initialize parameters for sensitivity analysis
+    n_months = 12
+    traffic = np.array([1000, 1200, 1100, 1300, 1250, 1400, 1300, 1250, 1400, 1300, 1250, 1400])
+    prob_prospect_generation = 0.30
+    prob_prospect_conversion = np.array([0.3, 0.2, 0.1] + [0] * 9)
+    local_prob_direct_customer_conversion = 0.1
+    tourist_prob_direct_customer_conversion = 0.05
+    local_retention_prob = np.array([0.2, 0.1, 0.06, 0.05, 0.04, 0.03] + [0.03] * 6)
+    tourist_retention_prob = np.array([0.12, 0.6, 0.5, 0.3, 0.02, 0.01] + [0.01] * 6)
+    local_prob_existing_clients_conversion = 0.03
+    tourist_prob_existing_clients_conversion = 0.01
+    existing_local_customers = 5000
+    existing_tourist_customers = 1000
+
+    # Create average ticket dataframe
+    avg_ticket_df = pd.DataFrame({
+        'local_avg_ticket_new_from_prospects': [50],
+        'local_avg_ticket_new_direct': [60],
+        'local_avg_ticket_existing': [40],
+        'tourist_avg_ticket_new_from_prospects': [0],
+        'tourist_avg_ticket_new_direct': [80],
+        'tourist_avg_ticket_existing': [45]
+    })
+
+    # Get remaining months from selected month
+    current_month_idx = shop_monthly_data[shop_monthly_data["month"] == selected_month].index[0]
+    remaining_months = n_months - current_month_idx
+    remaining_traffic = traffic[current_month_idx:]
+
+    sensitivity_df = perform_sensitivity_analysis(
+        remaining_traffic, prob_prospect_generation, prob_prospect_conversion[:remaining_months],
+        local_prob_direct_customer_conversion, local_retention_prob[:remaining_months],
+        local_prob_existing_clients_conversion, tourist_prob_direct_customer_conversion,
+        tourist_prob_existing_clients_conversion, tourist_retention_prob[:remaining_months],
+        existing_local_customers, existing_tourist_customers, avg_ticket_df
+    )
+
+    baseline_total_revenue = compute_revenue_forecast(
+        baseline_local_forecast, baseline_tourist_forecast, avg_ticket_df
+    )['revenue_total'].sum()
+    
+    # Calculate required percentage changes
+    growth_required = ((budget_target - baseline_total_revenue) / baseline_total_revenue) * 100
+    sensitivity_df = sensitivity_df.sort_values(by='Impact %', ascending=False)
+    required_changes = growth_required / sensitivity_df['Impact %']
+    sensitivity_df["Required % Change"] = required_changes
+    
+    # Rename the Impact % column for consistency
+    sensitivity_df = sensitivity_df.rename(columns={'Impact %': '% Impact on Total Revenue'})
+
+    # Display impact analysis using metrics
+    st.subheader("Variable Impact Analysis")
+    st.write("A 1% increase in each variable results in the following revenue impact. The required change shows how much each variable needs to change to meet the budget target.")
+    st.dataframe(sensitivity_df.style.format({"Impact %": "{:.2f}%", "Required % Change": "{:.2f}%"}))
+
+    # Display final KPI values
+    st.subheader("Optimal KPI Values")
+
+    # Calculate KPIs using compute_kpi function
+    final_kpis = compute_kpi(
+        traffic=np.full(n_months, traffic), 
+        existing_local_customers=existing_local_customers,
+        existing_tourist_customers=existing_tourist_customers,
+        total_revenue_df=adjusted_revenue,
+        local_customer_forecast_df=adjusted_local_forecast,
+        tourist_customer_forecast_df=adjusted_tourist_forecast
+    )
+
+    st.dataframe(final_kpis.style.format({"Value": "{:.2%}"}))
