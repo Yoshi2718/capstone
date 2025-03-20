@@ -593,19 +593,19 @@ else:  # KPI Optimization
     col3.metric("Budget Target", f"€{budget_target:,.0f}")
     col4.metric("Gap", f"€{gap:,.0f}")
 
-    # Plot revenue comparison
+    # Plot revenue comparison with accumulated values
     revenue_comparison = pd.DataFrame({
         "Month": [f"Month {i+1}" for i in range(n_months)],
-        "Adjusted Revenue": adjusted_revenue["revenue_total"],
-        "Monthly Budget": [shop_data["budget_sales"].values[0]/12] * n_months
+        "Adjusted Revenue": adjusted_revenue["revenue_total"].cumsum(),
+        "Monthly Budget": [shop_data["budget_sales"].values[0]] * 12
     })
 
     fig = px.line(
         revenue_comparison,
         x="Month",
         y=["Adjusted Revenue", "Monthly Budget"],
-        title="Revenue Projection with Adjusted KPIs",
-        labels={"value": "Revenue (€)", "variable": "Type"}
+        title="Accumulated Revenue Projection with Adjusted KPIs",
+        labels={"value": "Accumulated Revenue (€)", "variable": "Type"}
     )
     fig.update_layout(
         yaxis=dict(
