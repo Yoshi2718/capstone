@@ -486,8 +486,9 @@ else:  # KPI Optimization
     remaining_months = adjusted_revenue["revenue_total"].iloc[current_month_idx:]
     
     # Create revenue comparison DataFrame for remaining months
+    # Add YTD revenue to the cumulative sum so the projection reaches budget by Dec 2020
     revenue_comparison = pd.DataFrame({
-        "Adjusted Revenue": remaining_months.cumsum(),
+        "Adjusted Revenue": remaining_months.cumsum() + ytd_revenue,
         "Budget": [shop_data["budget_sales"].values[0]] * len(remaining_months)
     })
 
@@ -495,7 +496,7 @@ else:  # KPI Optimization
         revenue_comparison,
         x=revenue_comparison.index,
         y="Adjusted Revenue",
-        title="Accumulated Adjusted Revenue Projection (Remaining Months)",
+        title="Accumulated Adjusted Revenue Projection (YTD + Remaining Months)",
         labels={"Adjusted Revenue": "Accumulated Revenue (€)", "Month": "Month"}
     )
 
