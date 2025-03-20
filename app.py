@@ -14,7 +14,7 @@ st.markdown("Analyze and optimize revenue forecasts through KPI adjustments and 
 # Initialize session state for data persistence
 if 'macrotable_df' not in st.session_state:
     # Generate monthly data for the year
-    months = pd.date_range(start='2020-01-01', end='2020-12-31', freq='M')
+    months = pd.date_range(start='2020-01-01', end='2020-12-31', freq='ME')
     shops = [1]
     data = []
 
@@ -289,7 +289,7 @@ if  analysis_type == "KPI Month 0":
 
     # Create accumulated monthly data for comparison
     end_date = pd.Timestamp('2020-12-31')
-    date_range = pd.date_range(start=selected_month, end=end_date, freq='M')
+    date_range = pd.date_range(start=selected_month, end=end_date, freq='ME')
     monthly_data = pd.DataFrame(index=date_range)
     monthly_data['Total Revenue Forecast'] = revenue_forecast['revenue_total'].values[:len(date_range)].cumsum()
     monthly_data['Budget'] = [shop_data['budget_sales'].iloc[0]] * len(date_range)
@@ -370,17 +370,23 @@ else:  # KPI Optimization
     increase_factor = budget_target / baseline_revenue
 
     # Calculate optimized KPI values (increase the most impactful KPIs more)
-    optimized_prospect_gen = min(initial_prospect_gen * increase_factor, 1.0)
-    optimized_local_effectiveness = min(initial_local_effectiveness * increase_factor, 1.0)
-    optimized_tourist_effectiveness = min(initial_tourist_effectiveness * increase_factor, 1.0)
-    optimized_local_comeback = min(initial_local_comeback * increase_factor, 1.0)
-    optimized_tourist_comeback = min(initial_tourist_comeback * increase_factor, 1.0)
+    optimized_prob_prospect_generation = min(initial_prospect_gen * increase_factor, 1.0)
+    optimized_local_prob_direct_customer_conversion = min(initial_local_effectiveness * increase_factor, 1.0)
+    optimized_tourist_prob_direct_customer_conversion = min(initial_tourist_effectiveness * increase_factor, 1.0)
+    optimized_local_prob_existing_clients_conversion = min(initial_local_comeback * increase_factor, 1.0)
+    optimized_tourist_prob_existing_clients_conversion = min(initial_tourist_comeback * increase_factor, 1.0)
+    # Store original values to use in sliders
+    optimized_prospect_gen = optimized_prob_prospect_generation
+    optimized_local_effectiveness = optimized_local_prob_direct_customer_conversion
+    optimized_tourist_effectiveness = optimized_tourist_prob_direct_customer_conversion
+    optimized_local_comeback = optimized_local_prob_existing_clients_conversion
+    optimized_tourist_comeback = optimized_tourist_prob_existing_clients_conversion
 
     # Add KPI adjustment controls in sidebar
     st.sidebar.subheader("KPI Adjustments")
 
     # Create sliders for KPI adjustments with optimized values as defaults
-    adjusted_prospect_gen = st.sidebar.slider(
+    prob_prospect_generation = st.sidebar.slider(
         "Prospect Generation Rate",
         min_value=0.0,
         max_value=1.0,
@@ -389,8 +395,21 @@ else:  # KPI Optimization
         format="%.2f"
     )
 
-    adjusted_local_effectiveness = st.sidebar.slider(
-        "Local New Closing Ratio",
+    local_prob_prospect_conversion_value = prob_prospect_conversion[0]
+    local_prob_prospect_conversion_slider = st.sidebar.slider(
+        "Local Prospect Conversion Rate",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(local_prob_prospect_conversion_value),
+        step=0.01,
+        format="%.2f"
+    )
+    # Update the first value in the array (most important one)
+    local_prob_prospect_conversion = prob_prospect_conversion.copy()
+    local_prob_prospect_conversion[0] = local_prob_prospect_conversion_slider
+
+    local_prob_direct_customer_conversion = st.sidebar.slider(
+        "Local Direct Customer Conversion",
         min_value=0.0,
         max_value=1.0,
         value=float(optimized_local_effectiveness),
@@ -398,17 +417,21 @@ else:  # KPI Optimization
         format="%.2f"
     )
 
-    adjusted_tourist_effectiveness = st.sidebar.slider(
-        "Tourist New Closing Ratio",
+    local_retention_prob_value = local_retention_prob[0]
+    local_retention_prob_slider = st.sidebar.slider(
+        "Local Retention Probability",
         min_value=0.0,
         max_value=1.0,
-        value=float(optimized_tourist_effectiveness),
+        value=float(local_retention_prob_value),
         step=0.01,
         format="%.2f"
     )
+    # Update the first value in the array (most important one)
+    local_retention_prob_updated = local_retention_prob.copy()
+    local_retention_prob_updated[0] = local_retention_prob_slider
 
-    adjusted_local_comeback = st.sidebar.slider(
-        "Local Comeback Rate",
+    local_prob_existing_clients_conversion = st.sidebar.slider(
+        "Local Existing Clients Conversion",
         min_value=0.0,
         max_value=1.0,
         value=float(optimized_local_comeback),
@@ -416,8 +439,17 @@ else:  # KPI Optimization
         format="%.2f"
     )
 
-    adjusted_tourist_comeback = st.sidebar.slider(
-        "Tourist Comeback Rate",
+    tourist_prob_direct_customer_conversion = st.sidebar.slider(
+        "Tourist Direct Customer Conversion",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(optimized_tourist_effectiveness),
+        step=0.01,
+        format="%.2f"
+    )
+
+    tourist_prob_existing_clients_conversion = st.sidebar.slider(
+        "Tourist Existing Clients Conversion",
         min_value=0.0,
         max_value=1.0,
         value=float(optimized_tourist_comeback),
@@ -425,15 +457,28 @@ else:  # KPI Optimization
         format="%.2f"
     )
 
+    tourist_retention_prob_value = tourist_retention_prob[0]
+    tourist_retention_prob_slider = st.sidebar.slider(
+        "Tourist Retention Probability",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(tourist_retention_prob_value),
+        step=0.01,
+        format="%.2f"
+    )
+    # Update the first value in the array (most important one)
+    tourist_retention_prob_updated = tourist_retention_prob.copy()
+    tourist_retention_prob_updated[0] = tourist_retention_prob_slider
+
     # Forecast with adjusted KPIs
     adjusted_local_forecast = compute_customer_forecast(
         n_months,
         np.full(n_months, traffic),
-        adjusted_prospect_gen,
-        prob_prospect_conversion,
-        adjusted_local_effectiveness,
-        local_retention_prob,
-        adjusted_local_comeback,
+        prob_prospect_generation,
+        local_prob_prospect_conversion,
+        local_prob_direct_customer_conversion,
+        local_retention_prob_updated,
+        local_prob_existing_clients_conversion,
         shop_data["db_buyers_locals"].values[0]
     )
 
@@ -441,10 +486,10 @@ else:  # KPI Optimization
         n_months,
         np.full(n_months, traffic),
         0,
-        prob_prospect_conversion,
-        adjusted_tourist_effectiveness,
-        tourist_retention_prob,
-        adjusted_tourist_comeback,
+        local_prob_prospect_conversion,
+        tourist_prob_direct_customer_conversion,
+        tourist_retention_prob_updated,
+        tourist_prob_existing_clients_conversion,
         shop_data["db_buyers_tourist"].values[0]
     )
 
@@ -571,7 +616,7 @@ else:  # KPI Optimization
     # Display impact analysis using metrics
     st.subheader("Variable Impact Analysis")
     st.write("A 1% increase in each variable results in the following revenue impact. The required change shows how much each variable needs to change to meet the budget target.")
-    st.dataframe(sensitivity_df.style.format({"Impact %": "{:.2f}%", "Required % Change": "{:.2f}%"}))
+    st.dataframe(sensitivity_df.style.format({"% Impact on Total Revenue": "{:.2f}%", "Required % Change": "{:.2f}%"}))
 
     # Display final KPI values
     st.subheader("Optimal KPI Values")
